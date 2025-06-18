@@ -25,28 +25,39 @@ pipeline {
     }
 
     stage('Detect Apps') {
-      steps {
-        script {
-          // Try to detect changed apps; fallback to all
-          def changed = powershell(returnStdout: true, script: '''
+  steps {
+    script {
+      // 1. Try to detect changed apps
+      def changed = powershell(returnStdout: true, script: '''
 git fetch origin master
 git diff --name-only origin/master...HEAD |
   Where-Object { $_ -like 'APPS/*' } |
   ForEach-Object { ($_ -split '/')[1] } |
   Sort-Object -Unique
-''').trim().split("\r\n").findAll{ it }
+''').trim().split("\r\n").findAll { it }
 
-          if (!changed) {
-            changed = powershell(returnStdout: true, script: '''
-Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
-''').trim().split("\r\n").findAll{ it }
-          }
-
-          env.APPS = changed.join(',')
-          echo "🔍 Will build apps: ${env.APPS}"
-        }
+      // 2. Fallback to all subfolders under APPS\
+      if (!changed) {
+        changed = powershell(returnStdout: true, script: '''
+Get-ChildItem -Path 'APPS' -Directory |
+  Where-Object { -not $_.Name.StartsWith('.') } |
+  ForEach-Object { $_.Name }
+''').trim().split("\r\n").findAll { it }
       }
+
+      // 3. In case git diff picked up .metadata, also filter here
+      changed = changed.findAll { app -> !app.startsWith('.') }
+
+      if (!changed) {
+        error "No valid apps found under APPS\\"
+      }
+
+      env.APPS = changed.join(',')
+      echo "🔍 Will build apps: ${env.APPS}"
     }
+  }
+}
+
 
     stage('Prepare Output Directory') {
       steps {
