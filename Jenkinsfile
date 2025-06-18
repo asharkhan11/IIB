@@ -65,12 +65,43 @@ Get-ChildItem -Path 'APPS' -Directory |
       }
     }
 
-    stage('Build & Deploy') {
+//     stage('Build & Deploy') {
+//   steps {
+//     script {
+
+//       for (app in env.APPS.split(',')) {
+//         def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
+
+//         echo "📦 Creating BAR for ${app}"
+//         bat """
+// "${ACE_CREATEBAR_EXE}" ^
+//   -data "%WORKSPACE%\\APPS" ^
+//   -b "${barFile}" ^
+//   -a "${app}" ^
+//   -p "${app}"
+// """
+
+//         echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
+//         bat """
+// "${ACE_DEPLOY_EXE}" ^
+//   --integration-node "${INTEGRATION_NODE}" ^
+//   --integration-server "${INTEGRATION_SERVER}" ^
+//   --bar-file "${barFile}"
+// """
+//       }
+//     }
+//   }
+// }
+    stage('Build & Drop BAR') {
   steps {
     script {
+      // ensure bars directory exists
+      bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
 
       for (app in env.APPS.split(',')) {
         def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
+        def targetDir = "C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13\\run"
+        def targetPath = "${targetDir}\\${app}.bar"
 
         echo "📦 Creating BAR for ${app}"
         bat """
@@ -81,17 +112,16 @@ Get-ChildItem -Path 'APPS' -Directory |
   -p "${app}"
 """
 
-        echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
+        echo "📋 Copying ${app}.bar to the server run directory"
         bat """
-"${ACE_DEPLOY_EXE}" ^
-  --integration-node "${INTEGRATION_NODE}" ^
-  --integration-server "${INTEGRATION_SERVER}" ^
-  --bar-file "${barFile}"
+if not exist "${targetDir}" mkdir "${targetDir}"
+copy /Y "${barFile}" "${targetPath}"
 """
       }
     }
   }
 }
+
 
   }
 
