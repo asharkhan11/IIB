@@ -55,31 +55,35 @@ Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
     }
 
     stage('Build & Deploy') {
-      steps {
-        script {
-          for (app in env.APPS.split(',')) {
-            def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
+  steps {
+    script {
 
-            echo "📦 Creating BAR for ${app}"
-            bat """
-\"${ACE_CREATEBAR_EXE}\" ^
-  -data "${NODE_PATH}" ^
+      for (app in env.APPS.split(',')) {
+        def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
+
+        echo "📦 Creating BAR for ${app}"
+        bat """
+"${ACE_CREATEBAR_EXE}" ^
+  -data "%WORKSPACE%" ^
   -b "${barFile}" ^
   -a "${app}" ^
   -p "${app}"
 """
 
-            echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
-            bat """
-\"${ACE_DEPLOY_EXE}\" ^
+        echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
+        bat """
+"${ACE_DEPLOY_EXE}" ^
   --integration-node "${INTEGRATION_NODE}" ^
+  --integration-node-path "${NODE_PATH}" ^
   --integration-server "${INTEGRATION_SERVER}" ^
+  --integration-server-path "${SERVER_PATH}" ^
   --bar-file "${barFile}"
 """
-          }
-        }
       }
     }
+  }
+}
+
   }
 
   post {
