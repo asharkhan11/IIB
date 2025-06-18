@@ -3,10 +3,18 @@ pipeline {
   environment {
     REPO_URL           = 'https://github.com/asharkhan11/IIB.git'
     BAR_OUTPUT_DIR     = "${env.WORKSPACE}\\bars"
-    ACE_WS             = 'C:\\Users\\Sreenivas Bandaru\\IBM\\ACET13\\workspace\\TEST_SERVER'
+
+    // ACE workspace isn't needed for deploy if you're pointing directly at the MQSI component folders:
     ACE_CREATEBAR_EXE  = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\tools\\mqsicreatebar.exe'
     ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
-    INTEGRATION_SERVER = 'TEST_SERVER'
+
+    // Integration node & server names
+    INTEGRATION_NODE   = 'node13'
+    INTEGRATION_SERVER = 'server13'
+
+    // Paths for your integration node & server
+   // NODE_PATH          = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13'
+   // SERVER_PATH        = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13'
   }
 
   stages {
@@ -19,7 +27,7 @@ pipeline {
     stage('Detect Apps') {
       steps {
         script {
-          // Fallback to all apps if no diffs
+          // Try to detect changed apps; fallback to all
           def changed = powershell(returnStdout: true, script: '''
 git fetch origin master
 git diff --name-only origin/master...HEAD |
@@ -40,28 +48,33 @@ Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
       }
     }
 
+    stage('Prepare Output Directory') {
+      steps {
+        bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
+      }
+    }
+
     stage('Build & Deploy') {
       steps {
         script {
-          bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
-
           for (app in env.APPS.split(',')) {
-            def bar = "${BAR_OUTPUT_DIR}\\${app}.bar"
+            def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
 
-            echo "📦 Creating BAR for ${app} from ACE workspace ${ACE_WS}"
+            echo "📦 Creating BAR for ${app}"
             bat """
 \"${ACE_CREATEBAR_EXE}\" ^
-  -data "${ACE_WS}" ^
-  -b "${bar}" ^
+  -data "${NODE_PATH}" ^
+  -b "${barFile}" ^
   -a "${app}" ^
   -p "${app}"
 """
 
-            echo "🚀 Deploying ${app}.bar to integration server in ${ACE_WS}"
+            echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
             bat """
 \"${ACE_DEPLOY_EXE}\" ^
-   node13 --integration-server server13  ^
-  --bar-file "${bar}"
+  --integration-node "${INTEGRATION_NODE}" ^
+  --integration-server "${INTEGRATION_SERVER}" ^
+  --bar-file "${barFile}"
 """
           }
         }
@@ -70,6 +83,8 @@ Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
   }
 
   post {
-    always { echo "✅ Done." }
+    always {
+      echo "✅ Done."
+    }
   }
 }
