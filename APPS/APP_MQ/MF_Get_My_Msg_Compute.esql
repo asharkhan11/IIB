@@ -1,0 +1,28 @@
+
+
+CREATE COMPUTE MODULE MF_Get_My_Msg_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		 CALL CopyEntireMessage();
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = NULL;
+		CREATE LASTCHILD OF OutputRoot DOMAIN('MQMD');
+		SET OutputRoot.MQMD.CorrelId = CAST('000000000000000000000007' AS BLOB CCSID 1208);
+		SET OutputRoot.JSON.Data = InputRoot.JSON.Data;
+		
+	END;
+END MODULE;
