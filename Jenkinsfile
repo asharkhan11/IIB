@@ -13,8 +13,8 @@ pipeline {
     INTEGRATION_SERVER = 'server13'
 
     // Paths for your integration node & server
-   // NODE_PATH          = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13'
-   // SERVER_PATH        = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13'
+    NODE_PATH          = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13'
+    SERVER_PATH        = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13'
   }
 
   stages {
