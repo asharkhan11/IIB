@@ -1,36 +1,34 @@
- pipeline {
--  agent any
--  environment {
--    REPO_URL = 'https://github.com/asharkhan11/IIB.git'
--  }
-+  agent any
-+  environment {
-+    REPO_URL = 'https://github.com/asharkhan11/IIB.git'
-+  }
-   stages {
-     stage('Checkout') {
-       steps {
--        git url: "${REPO_URL}", branch: 'main'
-+        git url: "${REPO_URL}", branch: 'master'
-       }
-     }
-     stage('Detect Changed App') {
-       steps {
-         script {
--          def changed = powershell(
-+          def changed = powershell(
-             returnStdout: true,
-             script: '''
--              git fetch origin main
--              git diff --name-only origin/main...HEAD |
-+              git fetch origin master
-+              git diff --name-only origin/master...HEAD |
-                 Where-Object { $_ -like 'APPS/*' } |
-                 ForEach-Object { ($_ -split '/')[1] } |
-                 Sort-Object -Unique
-             '''
-           ).trim().split("\r\n")
+pipeline {
+  agent any
+  environment {
+    REPO_URL            = 'https://github.com/asharkhan11/IIB.git'
+    BAR_OUTPUT_DIR      = "${env.WORKSPACE}\\bars"
+    ACE_DEPLOY_EXE      = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
+    ACE_CREATEBAR_EXE   = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\tools\\mqsicreatebar.exe'
+    INTEGRATION_SERVER  = 'default'
+  }
 
+  stages {
+    stage('Checkout') {
+      steps {
+        git url: "${REPO_URL}", branch: 'master'
+      }
+    }
+
+    stage('Detect Changed App') {
+      steps {
+        script {
+          // find unique subfolders under APPS\ changed in this push
+          def changed = powershell(
+            returnStdout: true,
+            script: '''
+              git fetch origin master
+              git diff --name-only origin/master...HEAD |
+                Where-Object { $_ -like 'APPS/*' } |
+                ForEach-Object { ($_ -split '/')[1] } |
+                Sort-Object -Unique
+            '''
+          ).trim().split("\r\n")
 
           if (changed.size() == 0 || changed[0] == '') {
             error "No changes detected under APPS\\ – nothing to build"
@@ -55,7 +53,7 @@
 
           echo "📦 Building BAR: ${barFile}"
           bat """
-            "\"${ACE_TOOLS}\"" ^
+            "\"${ACE_CREATEBAR_EXE}\"" ^
               -data "%WORKSPACE%" ^
               -b "${barFile}" ^
               -a "${appDir}" ^
@@ -71,7 +69,7 @@
           def barFile = "${BAR_OUTPUT_DIR}\\${env.APP_NAME}.bar"
           echo "🚀 Deploying ${barFile} to server '${INTEGRATION_SERVER}'"
           bat """
-            "\"${ACE_BIN}\"" ^
+            "\"${ACE_DEPLOY_EXE}\"" ^
               -i localhost ^
               -e ${INTEGRATION_SERVER} ^
               -a "${barFile}" ^
