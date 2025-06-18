@@ -64,7 +64,7 @@ Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
         echo "📦 Creating BAR for ${app}"
         bat """
 "${ACE_CREATEBAR_EXE}" ^
-  -data "%WORKSPACE%" ^
+  -data "%WORKSPACE%\\APPS" ^
   -b "${barFile}" ^
   -a "${app}" ^
   -p "${app}"
