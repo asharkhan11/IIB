@@ -1,34 +1,36 @@
-pipeline {
-  agent any
-  environment {
-    REPO_URL           = 'https://github.com/asharkhan11/IIB.git'
-    BAR_OUTPUT_DIR     = "${env.WORKSPACE}\\bars"
-    ACE_BIN            = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
-    ACE_TOOLS          = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\tools\\mqsicreatebar.exe'
-    INTEGRATION_SERVER = 'default'
-  }
+ pipeline {
+-  agent any
+-  environment {
+-    REPO_URL = 'https://github.com/asharkhan11/IIB.git'
+-  }
++  agent any
++  environment {
++    REPO_URL = 'https://github.com/asharkhan11/IIB.git'
++  }
+   stages {
+     stage('Checkout') {
+       steps {
+-        git url: "${REPO_URL}", branch: 'main'
++        git url: "${REPO_URL}", branch: 'master'
+       }
+     }
+     stage('Detect Changed App') {
+       steps {
+         script {
+-          def changed = powershell(
++          def changed = powershell(
+             returnStdout: true,
+             script: '''
+-              git fetch origin main
+-              git diff --name-only origin/main...HEAD |
++              git fetch origin master
++              git diff --name-only origin/master...HEAD |
+                 Where-Object { $_ -like 'APPS/*' } |
+                 ForEach-Object { ($_ -split '/')[1] } |
+                 Sort-Object -Unique
+             '''
+           ).trim().split("\r\n")
 
-  stages {
-    stage('Checkout') {
-      steps {
-        git url: "${REPO_URL}", branch: 'master'
-      }
-    }
-
-    stage('Detect Changed App') {
-      steps {
-        script {
-          // Run a PowerShell snippet to list unique subfolders under APPS\ changed in this push
-          def changed = powershell(
-            returnStdout: true,
-            script: '''
-              git fetch origin main
-              git diff --name-only origin/main...HEAD |
-                Where-Object { $_ -like 'APPS/*' } |
-                ForEach-Object { ($_ -split '/')[1] } |
-                Sort-Object -Unique
-            '''
-          ).trim().split("\r\n")
 
           if (changed.size() == 0 || changed[0] == '') {
             error "No changes detected under APPS\\ – nothing to build"
