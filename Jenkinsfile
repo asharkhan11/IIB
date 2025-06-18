@@ -3,9 +3,10 @@ pipeline {
   environment {
     REPO_URL           = 'https://github.com/asharkhan11/IIB.git'
     BAR_OUTPUT_DIR     = "${env.WORKSPACE}\\bars"
-    ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
+    ACE_WS             = 'C:\\Users\\Sreenivas Bandaru\\IBM\\ACET13\\workspace\\TEST_SERVER'
     ACE_CREATEBAR_EXE  = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\tools\\mqsicreatebar.exe'
-    INTEGRATION_SERVER = 'default'
+    ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
+    INTEGRATION_SERVER = 'TEST_SERVER'
   }
 
   stages {
@@ -15,69 +16,52 @@ pipeline {
       }
     }
 
-    stage('Detect Apps to Build') {
+    stage('Detect Apps') {
       steps {
         script {
-          // 1. Try to detect changed apps under APPS\
-          def changed = powershell(
-            returnStdout: true,
-            script: '''
+          // Fallback to all apps if no diffs
+          def changed = powershell(returnStdout: true, script: '''
 git fetch origin master
 git diff --name-only origin/master...HEAD |
   Where-Object { $_ -like 'APPS/*' } |
   ForEach-Object { ($_ -split '/')[1] } |
   Sort-Object -Unique
-'''
-          ).trim().split("\r\n").findAll { it }
+''').trim().split("\r\n").findAll{ it }
 
-          if (changed.isEmpty()) {
-            echo "No changes detected under APPS; building ALL apps."
-            // 2. Fallback: list every directory under APPS\
-            changed = powershell(
-              returnStdout: true,
-              script: '''
-Get-ChildItem -Path 'APPS' -Directory |
-  ForEach-Object { $_.Name }
-'''
-            ).trim().split("\r\n").findAll { it }
+          if (!changed) {
+            changed = powershell(returnStdout: true, script: '''
+Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
+''').trim().split("\r\n").findAll{ it }
           }
 
-          echo "🔍 Apps to build: ${changed}"
-          env.APPS_TO_BUILD = changed.join(',')
+          env.APPS = changed.join(',')
+          echo "🔍 Will build apps: ${env.APPS}"
         }
       }
     }
 
-    stage('Prepare Output Directory') {
-      steps {
-        bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
-      }
-    }
-
-    stage('Build & Deploy BARs') {
+    stage('Build & Deploy') {
       steps {
         script {
-          def apps = env.APPS_TO_BUILD.split(',')
-          for (app in apps) {
-            def appDir  = "APPS\\${app}"
-            def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
+          bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
 
-            echo "📦 Building BAR for ${app}: ${barFile}"
+          for (app in env.APPS.split(',')) {
+            def bar = "${BAR_OUTPUT_DIR}\\${app}.bar"
+
+            echo "📦 Creating BAR for ${app} from ACE workspace ${ACE_WS}"
             bat """
 \"${ACE_CREATEBAR_EXE}\" ^
-  -data "%WORKSPACE%" ^
-  -b "${barFile}" ^
-  -a "${appDir}" ^
-  -k "${appDir}"
+  -data "${ACE_WS}" ^
+  -b "${bar}" ^
+  -a "${app}" ^
+  -p "${app}"
 """
 
-            echo "🚀 Deploying ${app}.bar to server '${INTEGRATION_SERVER}'"
+            echo "🚀 Deploying ${app}.bar to integration server in ${ACE_WS}"
             bat """
 \"${ACE_DEPLOY_EXE}\" ^
-  -i localhost ^
-  -e ${INTEGRATION_SERVER} ^
-  -a "${barFile}" ^
-  -m
+   node13 --integration-server server13  ^
+  --bar-file "${bar}"
 """
           }
         }
@@ -86,8 +70,6 @@ Get-ChildItem -Path 'APPS' -Directory |
   }
 
   post {
-    always {
-      echo "✅ Pipeline finished."
-    }
+    always { echo "✅ Done." }
   }
 }
