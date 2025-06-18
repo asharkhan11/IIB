@@ -18,35 +18,31 @@ pipeline {
     stage('Detect Apps to Build') {
       steps {
         script {
-          // 1. Try to detect changed apps
+          // 1. Try to detect changed apps under APPS\
           def changed = powershell(
             returnStdout: true,
             script: '''
-              # fetch remote so diff works
-              git fetch origin master
-
-              # list unique subfolders under APPS\ changed in this push
-              git diff --name-only origin/master...HEAD |
-                Where-Object { $_ -like 'APPS/*' } |
-                ForEach-Object { ($_ -split '/')[1] } |
-                Sort-Object -Unique
-            '''
+git fetch origin master
+git diff --name-only origin/master...HEAD |
+  Where-Object { $_ -like 'APPS/*' } |
+  ForEach-Object { ($_ -split '/')[1] } |
+  Sort-Object -Unique
+'''
           ).trim().split("\r\n").findAll { it }
 
           if (changed.isEmpty()) {
-            echo "No changes detected under APPS\\; building ALL apps."
-            // fallback: list every directory under APPS\
+            echo "No changes detected under APPS; building ALL apps."
+            // 2. Fallback: list every directory under APPS\
             changed = powershell(
               returnStdout: true,
               script: '''
-                Get-ChildItem -Path 'APPS' -Directory |
-                  ForEach-Object { $_.Name }
-              '''
+Get-ChildItem -Path 'APPS' -Directory |
+  ForEach-Object { $_.Name }
+'''
             ).trim().split("\r\n").findAll { it }
           }
 
           echo "🔍 Apps to build: ${changed}"
-          // stash into a Groovy variable for later stages
           env.APPS_TO_BUILD = changed.join(',')
         }
       }
@@ -68,21 +64,21 @@ pipeline {
 
             echo "📦 Building BAR for ${app}: ${barFile}"
             bat """
-              "\"${ACE_CREATEBAR_EXE}\"" ^
-                -data "%WORKSPACE%" ^
-                -b "${barFile}" ^
-                -a "${appDir}" ^
-                -k "${appDir}"
-            """
+\"${ACE_CREATEBAR_EXE}\" ^
+  -data "%WORKSPACE%" ^
+  -b "${barFile}" ^
+  -a "${appDir}" ^
+  -k "${appDir}"
+"""
 
             echo "🚀 Deploying ${app}.bar to server '${INTEGRATION_SERVER}'"
             bat """
-              "\"${ACE_DEPLOY_EXE}\"" ^
-                -i localhost ^
-                -e ${INTEGRATION_SERVER} ^
-                -a "${barFile}" ^
-                -m
-            """
+\"${ACE_DEPLOY_EXE}\" ^
+  -i localhost ^
+  -e ${INTEGRATION_SERVER} ^
+  -a "${barFile}" ^
+  -m
+"""
           }
         }
       }
