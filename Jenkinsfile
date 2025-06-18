@@ -74,9 +74,7 @@ Get-ChildItem -Path 'APPS' -Directory | ForEach-Object { $_.Name }
         bat """
 "${ACE_DEPLOY_EXE}" ^
   --integration-node "${INTEGRATION_NODE}" ^
-  --integration-node-path "${NODE_PATH}" ^
   --integration-server "${INTEGRATION_SERVER}" ^
-  --integration-server-path "${SERVER_PATH}" ^
   --bar-file "${barFile}"
 """
       }
