@@ -27,6 +27,28 @@ pipeline {
       }
     }
 
+    stage('Check Changed Files') {
+  steps {
+    script {
+      def changedFiles = bat(
+        script: 'git diff --name-only HEAD~1 HEAD',
+        returnStdout: true
+      ).trim().split("\r?\n")
+
+      def shouldBuild = changedFiles.any { it == 'applists' }
+
+      if (!shouldBuild) {
+        echo "🛑 Skipping pipeline - 'applists' file was not changed."
+        currentBuild.result = 'NOT_BUILT'
+        error('No relevant changes detected.')
+      } else {
+        echo "✅ Detected change in applists, continuing build."
+      }
+    }
+  }
+}
+
+
     stage('Read App List') {
       steps {
         script {
