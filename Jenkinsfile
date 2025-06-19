@@ -1,24 +1,29 @@
 pipeline {
   agent any
+
+  parameters {
+    string(name: 'ACE_VERSION', defaultValue: '12.0.12.0', description: 'ACE installation version')
+    string(name: 'INTEGRATION_NODE', defaultValue: 'Node_1', description: 'Integration Node Name')
+    string(name: 'INTEGRATION_SERVER', defaultValue: 'Server_1', description: 'Integration Server Name')
+    string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
+  }
+
   environment {
-    REPO_URL           = 'https://github.com/asharkhan11/IIB.git'
-    BAR_OUTPUT_DIR     = "${env.WORKSPACE}\\bars"
+    REPO_URL       = 'https://github.com/asharkhan11/IIB.git'
+    WORKSPACE_ROOT = "${env.WORKSPACE}"
+    BAR_OUTPUT_DIR = "${WORKSPACE_ROOT}\\bars"
 
-    // ACE 13 paths for bar creation and deploy
-    ACE_CREATEBAR_EXE  = 'C:\\Program Files\\IBM\\ACE\\12.0.2.0\\tools\\mqsicreatebar.exe'
-    ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\12.0.2.0\\server\\bin\\mqsideploy.exe'
-
-    INTEGRATION_NODE   = 'Node_2'
-    INTEGRATION_SERVER = 'Server_1'
-
-    NODE_PATH          = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13'
-    SERVER_PATH        = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13'
+    ACE_HOME       = "C:\\Program Files\\IBM\\ACE\\${params.ACE_VERSION}"
+    CREATEBAR_EXE  = "${ACE_HOME}\\tools\\mqsicreatebar.exe"
+    DEPLOY_EXE     = "${ACE_HOME}\\server\\bin\\mqsideploy.exe"
+    MQSIPROFILE    = "${ACE_HOME}\\server\\bin\\mqsiprofile.cmd"
+    OSSL_MODULES   = "${ACE_HOME}\\server\\lib\\ossl-modules"
   }
 
   stages {
     stage('Checkout') {
       steps {
-        git url: "${REPO_URL}", branch: 'master'
+        git url: "${REPO_URL}", branch: "${params.BRANCH}"
       }
     }
 
@@ -59,7 +64,7 @@ Get-ChildItem -Path 'APPS' -Directory |
       }
     }
 
-    stage('Build & Deploy (ACE 12)') {
+    stage('Build & Deploy') {
       steps {
         script {
           for (app in env.APPS.split(',')) {
@@ -67,28 +72,27 @@ Get-ChildItem -Path 'APPS' -Directory |
 
             echo "📦 Creating BAR for ${app}"
             bat """
-"${ACE_CREATEBAR_EXE}" ^
-  -data "%WORKSPACE%\\APPS" ^
+CALL "${MQSIPROFILE}"
+"${CREATEBAR_EXE}" ^
+  -data "${WORKSPACE_ROOT}" ^
   -b "${barFile}" ^
   -a "${app}" ^
   -p "${app}"
 """
 
- echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
-  bat """
-  CALL "C:\\Program Files\\IBM\\ACE\\12.0.12.0\\server\\bin\\mqsiprofile.cmd"
-  set OPENSSL_MODULES=C:\\Program Files\\IBM\\ACE\\12.0.12.0\\server\\lib\\ossl-modules
-    
-"${ACE_DEPLOY_EXE}" ^
-  "${INTEGRATION_NODE}" ^
-  -e "${INTEGRATION_SERVER}" ^
+            echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
+            bat """
+CALL "${MQSIPROFILE}"
+set OPENSSL_MODULES=${OSSL_MODULES}
+"${DEPLOY_EXE}" ^
+  "${params.INTEGRATION_NODE}" ^
+  -e "${params.INTEGRATION_SERVER}" ^
   -a "${barFile}"
 """
           }
         }
       }
     }
-
   }
 
   post {
