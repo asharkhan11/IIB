@@ -10,28 +10,46 @@ pipeline {
   }
 
   environment {
-    REPO_URL       = 'https://github.com/asharkhan11/IIB.git'
-    WORKSPACE_ROOT = "${env.WORKSPACE}"
-    BAR_OUTPUT_DIR = "${params.OS_TYPE}" == 'windows' ? "${env.WORKSPACE}\\bars" : "${env.WORKSPACE}/bars"
-
-    ACE_HOME       = "${params.OS_TYPE}" == 'windows' ? "C:\\Program Files\\IBM\\ACE\\${params.ACE_VERSION}" : "/home/ace/ace-${params.ACE_VERSION}"
-    CREATEBAR_EXE  = "${ACE_HOME}${params.OS_TYPE == 'windows' ? '\\tools\\mqsicreatebar.exe' : '/tools/mqsicreatebar'}"
-    DEPLOY_EXE     = "${ACE_HOME}${params.OS_TYPE == 'windows' ? '\\server\\bin\\mqsideploy.exe' : '/server/bin/mqsideploy'}"
-    MQSIPROFILE    = "${ACE_HOME}${params.OS_TYPE == 'windows' ? '\\server\\bin\\mqsiprofile.cmd' : '/server/bin/mqsiprofile'}"
-    OSSL_MODULES   = "${ACE_HOME}${params.OS_TYPE == 'windows' ? '\\server\\lib\\ossl-modules' : '/server/lib/ossl-modules'}"
+    REPO_URL = 'https://github.com/asharkhan11/IIB.git'
   }
 
   stages {
+    stage('Init') {
+      steps {
+        script {
+          def sep = params.OS_TYPE == 'windows' ? '\\' : '/'
+          def aceHome = params.OS_TYPE == 'windows'
+                        ? "C:\\Program Files\\IBM\\ACE\\${params.ACE_VERSION}"
+                        : "/home/ace/ace-${params.ACE_VERSION}"
+
+          env.WORKSPACE_ROOT = env.WORKSPACE
+          env.BAR_OUTPUT_DIR = "${env.WORKSPACE}${sep}bars"
+          env.ACE_HOME       = aceHome
+          env.CREATEBAR_EXE  = "${aceHome}${params.OS_TYPE == 'windows' ? '\\tools\\mqsicreatebar.exe' : '/tools/mqsicreatebar'}"
+          env.DEPLOY_EXE     = "${aceHome}${params.OS_TYPE == 'windows' ? '\\server\\bin\\mqsideploy.exe' : '/server/bin/mqsideploy'}"
+          env.MQSIPROFILE    = "${aceHome}${params.OS_TYPE == 'windows' ? '\\server\\bin\\mqsiprofile.cmd' : '/server/bin/mqsiprofile'}"
+          
+          if (params.OS_TYPE == 'windows') {
+            env.OSSL_MODULES = "${aceHome}\\server\\lib\\ossl-modules"
+          }
+
+          echo "🔧 OS: ${params.OS_TYPE}"
+          echo "🔧 ACE_HOME: ${env.ACE_HOME}"
+          echo "🔧 BAR_OUTPUT_DIR: ${env.BAR_OUTPUT_DIR}"
+        }
+      }
+    }
+
     stage('Checkout') {
       steps {
-        git url: "${REPO_URL}", branch: "${params.BRANCH}"
+        git url: "${env.REPO_URL}", branch: "${params.BRANCH}"
       }
     }
 
     stage('Detect Apps') {
       steps {
         script {
-          def changed = ""
+          def changed = []
           if (params.OS_TYPE == 'windows') {
             changed = powershell(returnStdout: true, script: '''
 git fetch origin master
@@ -48,11 +66,11 @@ Get-ChildItem -Path 'APPS' -Directory |
   ForEach-Object { $_.Name }
 ''').trim().split("\r\n").findAll { it }
             }
+
           } else {
             changed = sh(returnStdout: true, script: '''
 git fetch origin master
-git diff --name-only origin/master...HEAD | \
-  grep '^APPS/' | cut -d/ -f2 | sort -u
+git diff --name-only origin/master...HEAD | grep '^APPS/' | cut -d/ -f2 | sort -u
 ''').trim().split("\n").findAll { it }
 
             if (!changed) {
@@ -65,7 +83,7 @@ ls -d APPS/*/ | xargs -n1 basename
           changed = changed.findAll { app -> !app.startsWith('.') }
 
           if (!changed) {
-            error "No valid apps found under APPS/"
+            error "❌ No valid apps found under APPS/"
           }
 
           env.APPS = changed.join(',')
@@ -78,9 +96,9 @@ ls -d APPS/*/ | xargs -n1 basename
       steps {
         script {
           if (params.OS_TYPE == 'windows') {
-            bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
+            bat "if not exist \"${env.BAR_OUTPUT_DIR}\" mkdir \"${env.BAR_OUTPUT_DIR}\""
           } else {
-            sh "mkdir -p \"${BAR_OUTPUT_DIR}\""
+            sh "mkdir -p \"${env.BAR_OUTPUT_DIR}\""
           }
         }
       }
@@ -91,32 +109,34 @@ ls -d APPS/*/ | xargs -n1 basename
         script {
           def apps = env.APPS.split(',')
           for (app in apps) {
-            def barFile = "${BAR_OUTPUT_DIR}${params.OS_TYPE == 'windows' ? '\\' : '/'}${app}.bar"
+            def barFile = "${env.BAR_OUTPUT_DIR}${params.OS_TYPE == 'windows' ? '\\' : '/'}${app}.bar"
 
             echo "📦 Creating BAR for ${app}"
 
             if (params.OS_TYPE == 'windows') {
               bat """
-CALL "${MQSIPROFILE}"
-"${CREATEBAR_EXE}" ^
+CALL "${env.MQSIPROFILE}"
+"${env.CREATEBAR_EXE}" ^
   -data "%WORKSPACE%\\APPS" ^
   -b "${barFile}" ^
   -a "${app}" ^
   -p "${app}"
 """
+
               echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
+
               bat """
-CALL "${MQSIPROFILE}"
-set OPENSSL_MODULES=${OSSL_MODULES}
-"${DEPLOY_EXE}" ^
+CALL "${env.MQSIPROFILE}"
+set OPENSSL_MODULES=${env.OSSL_MODULES}
+"${env.DEPLOY_EXE}" ^
   "${params.INTEGRATION_NODE}" ^
   -e "${params.INTEGRATION_SERVER}" ^
   -a "${barFile}"
 """
             } else {
               sh """
-. "${MQSIPROFILE}"
-"${CREATEBAR_EXE}" \
+. "${env.MQSIPROFILE}"
+"${env.CREATEBAR_EXE}" \
   -data "$WORKSPACE/APPS" \
   -b "${barFile}" \
   -a "${app}" \
@@ -126,9 +146,8 @@ set OPENSSL_MODULES=${OSSL_MODULES}
               echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
 
               sh """
-. "${MQSIPROFILE}"
-export OPENSSL_MODULES="${OSSL_MODULES}"
-"${DEPLOY_EXE}" \
+. "${env.MQSIPROFILE}"
+"${env.DEPLOY_EXE}" \
   "${params.INTEGRATION_NODE}" \
   -e "${params.INTEGRATION_SERVER}" \
   -a "${barFile}"
@@ -146,4 +165,3 @@ export OPENSSL_MODULES="${OSSL_MODULES}"
     }
   }
 }
-
