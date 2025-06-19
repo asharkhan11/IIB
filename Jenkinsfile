@@ -4,15 +4,13 @@ pipeline {
     REPO_URL           = 'https://github.com/asharkhan11/IIB.git'
     BAR_OUTPUT_DIR     = "${env.WORKSPACE}\\bars"
 
-    // ACE workspace isn't needed for deploy if you're pointing directly at the MQSI component folders:
-    ACE_CREATEBAR_EXE  = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\tools\\mqsicreatebar.exe'
-    ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\13.0.3.0\\server\\bin\\mqsideploy.exe'
+    // ACE 13 paths for bar creation and deploy
+    ACE_CREATEBAR_EXE  = 'C:\\Program Files\\IBM\\ACE\\12.0.2.0\\tools\\mqsicreatebar.exe'
+    ACE_DEPLOY_EXE     = 'C:\\Program Files\\IBM\\ACE\\12.0.2.0\\server\\bin\\mqsideploy.exe'
 
-    // Integration node & server names
-    INTEGRATION_NODE   = 'node13'
-    INTEGRATION_SERVER = 'server13'
+    INTEGRATION_NODE   = 'Node_2'
+    INTEGRATION_SERVER = 'Server_1'
 
-    // Paths for your integration node & server
     NODE_PATH          = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13'
     SERVER_PATH        = 'C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13'
   }
@@ -25,10 +23,9 @@ pipeline {
     }
 
     stage('Detect Apps') {
-  steps {
-    script {
-      // 1. Try to detect changed apps
-      def changed = powershell(returnStdout: true, script: '''
+      steps {
+        script {
+          def changed = powershell(returnStdout: true, script: '''
 git fetch origin master
 git diff --name-only origin/master...HEAD |
   Where-Object { $_ -like 'APPS/*' } |
@@ -36,28 +33,25 @@ git diff --name-only origin/master...HEAD |
   Sort-Object -Unique
 ''').trim().split("\r\n").findAll { it }
 
-      // 2. Fallback to all subfolders under APPS\
-      if (!changed) {
-        changed = powershell(returnStdout: true, script: '''
+          if (!changed) {
+            changed = powershell(returnStdout: true, script: '''
 Get-ChildItem -Path 'APPS' -Directory |
   Where-Object { -not $_.Name.StartsWith('.') } |
   ForEach-Object { $_.Name }
 ''').trim().split("\r\n").findAll { it }
+          }
+
+          changed = changed.findAll { app -> !app.startsWith('.') }
+
+          if (!changed) {
+            error "No valid apps found under APPS\\"
+          }
+
+          env.APPS = changed.join(',')
+          echo "🔍 Will build apps: ${env.APPS}"
+        }
       }
-
-      // 3. In case git diff picked up .metadata, also filter here
-      changed = changed.findAll { app -> !app.startsWith('.') }
-
-      if (!changed) {
-        error "No valid apps found under APPS\\"
-      }
-
-      env.APPS = changed.join(',')
-      echo "🔍 Will build apps: ${env.APPS}"
     }
-  }
-}
-
 
     stage('Prepare Output Directory') {
       steps {
@@ -65,15 +59,14 @@ Get-ChildItem -Path 'APPS' -Directory |
       }
     }
 
-    stage('Build & Deploy') {
-  steps {
-    script {
+    stage('Build & Deploy (ACE 12)') {
+      steps {
+        script {
+          for (app in env.APPS.split(',')) {
+            def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
 
-      for (app in env.APPS.split(',')) {
-        def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
-
-        echo "📦 Creating BAR for ${app}"
-        bat """
+            echo "📦 Creating BAR for ${app}"
+            bat """
 "${ACE_CREATEBAR_EXE}" ^
   -data "%WORKSPACE%\\APPS" ^
   -b "${barFile}" ^
@@ -81,49 +74,20 @@ Get-ChildItem -Path 'APPS' -Directory |
   -p "${app}"
 """
 
-        echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
-        bat """
+ echo "🚀 Deploying ${app}.bar to ${INTEGRATION_NODE}/${INTEGRATION_SERVER}"
+  bat """
+  CALL "C:\\Program Files\\IBM\\ACE\\12.0.12.0\\server\\bin\\mqsiprofile.cmd"
+  set OPENSSL_MODULES=C:\\Program Files\\IBM\\ACE\\12.0.12.0\\server\\lib\\ossl-modules
+    
 "${ACE_DEPLOY_EXE}" ^
-  --integration-node "${INTEGRATION_NODE}" ^
-  --integration-server "${INTEGRATION_SERVER}" ^
-  --bar-file "${barFile}"
+  "${INTEGRATION_NODE}" ^
+  -e "${INTEGRATION_SERVER}" ^
+  -a "${barFile}"
 """
+          }
+        }
       }
     }
-  }
-}
-
-    
-//     stage('Build & Drop BAR') {
-//   steps {
-//     script {
-//       // ensure bars directory exists
-//       bat "if not exist \"${BAR_OUTPUT_DIR}\" mkdir \"${BAR_OUTPUT_DIR}\""
-
-//       for (app in env.APPS.split(',')) {
-//         def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
-//         def targetDir = "C:\\ProgramData\\IBM\\MQSI\\components\\node13\\servers\\server13\\run"
-//         def targetPath = "${targetDir}\\${app}.bar"
-
-//         echo "📦 Creating BAR for ${app}"
-//         bat """
-// "${ACE_CREATEBAR_EXE}" ^
-//   -data "%WORKSPACE%\\APPS" ^
-//   -b "${barFile}" ^
-//   -a "${app}" ^
-//   -p "${app}"
-// """
-
-//         echo "📋 Copying ${app}.bar to the server run directory"
-//         bat """
-// if not exist "${targetDir}" mkdir "${targetDir}"
-// copy /Y "${barFile}" "${targetPath}"
-// """
-//       }
-//     }
-//   }
-// }
-
 
   }
 
