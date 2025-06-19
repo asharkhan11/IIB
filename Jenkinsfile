@@ -3,7 +3,7 @@ pipeline {
 
   parameters {
     string(name: 'ACE_VERSION', defaultValue: '12.0.12.0', description: 'ACE installation version')
-    string(name: 'INTEGRATION_NODE', defaultValue: 'Node_1', description: 'Integration Node Name')
+    string(name: 'INTEGRATION_NODE', defaultValue: 'Node_2', description: 'Integration Node Name')
     string(name: 'INTEGRATION_SERVER', defaultValue: 'Server_1', description: 'Integration Server Name')
     string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
   }
