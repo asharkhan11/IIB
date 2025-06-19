@@ -49,13 +49,13 @@ pipeline {
       }
     }
 
-    stage('Build & Deploy') {
+    stage('Build BARs') {
       steps {
         script {
           for (app in env.APPS.split(',')) {
             def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
 
-            echo "📦 Creating BAR for ${app}"
+            echo "📦 Building BAR for ${app}"
             bat """
 CALL "${MQSIPROFILE}"
 "${CREATEBAR_EXE}" ^
@@ -64,6 +64,16 @@ CALL "${MQSIPROFILE}"
   -a "${app}" ^
   -p "${app}"
 """
+          }
+        }
+      }
+    }
+
+    stage('Deploy BARs') {
+      steps {
+        script {
+          for (app in env.APPS.split(',')) {
+            def barFile = "${BAR_OUTPUT_DIR}\\${app}.bar"
 
             echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
             bat """
@@ -82,7 +92,7 @@ set OPENSSL_MODULES=${OSSL_MODULES}
 
   post {
     always {
-      echo "✅ Done."
+      echo "✅ Pipeline completed."
     }
   }
 }
