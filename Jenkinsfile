@@ -74,9 +74,10 @@ Get-ChildItem -Path 'APPS' -Directory |
             bat """
 CALL "${MQSIPROFILE}"
 "${CREATEBAR_EXE}" ^
-  -data "${WORKSPACE_ROOT}" ^
+  -data "%WORKSPACE%\\APPS" ^
   -b "${barFile}" ^
-  -a "${app}"
+  -a "${app}" ^
+  -p "${app}"
 """
 
             echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
