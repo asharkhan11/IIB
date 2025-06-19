@@ -76,8 +76,7 @@ CALL "${MQSIPROFILE}"
 "${CREATEBAR_EXE}" ^
   -data "${WORKSPACE_ROOT}" ^
   -b "${barFile}" ^
-  -a "${app}" ^
-  -p "${app}"
+  -a "${app}"
 """
 
             echo "🚀 Deploying ${app}.bar to ${params.INTEGRATION_NODE}/${params.INTEGRATION_SERVER}"
