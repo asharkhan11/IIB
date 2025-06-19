@@ -27,33 +27,18 @@ pipeline {
       }
     }
 
-    stage('Detect Apps') {
+    stage('Read App List') {
       steps {
         script {
-          def changed = powershell(returnStdout: true, script: '''
-git fetch origin master
-git diff --name-only origin/master...HEAD |
-  Where-Object { $_ -like 'APPS/*' } |
-  ForEach-Object { ($_ -split '/')[1] } |
-  Sort-Object -Unique
-''').trim().split("\r\n").findAll { it }
+          def raw = readFile(file: 'applists').trim()
+          def appList = raw.split("\n").collect { it.trim() }.findAll { it && !it.startsWith('#') }
 
-          if (!changed) {
-            changed = powershell(returnStdout: true, script: '''
-Get-ChildItem -Path 'APPS' -Directory |
-  Where-Object { -not $_.Name.StartsWith('.') } |
-  ForEach-Object { $_.Name }
-''').trim().split("\r\n").findAll { it }
+          if (appList.isEmpty()) {
+            error "❌ 'applists' file is empty or invalid."
           }
 
-          changed = changed.findAll { app -> !app.startsWith('.') }
-
-          if (!changed) {
-            error "No valid apps found under APPS\\"
-          }
-
-          env.APPS = changed.join(',')
-          echo "🔍 Will build apps: ${env.APPS}"
+          env.APPS = appList.join(',')
+          echo "📄 Apps from applists file: ${env.APPS}"
         }
       }
     }
